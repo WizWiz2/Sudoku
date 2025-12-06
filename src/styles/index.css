@@ -1,0 +1,46 @@
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Fix for scrolling and clipping (1.10.1, 1.10.2) */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden; /* Prevent scrolling */
+  touch-action: none; /* Prevent default touch actions like zooming/scrolling */
+  overscroll-behavior: none; /* Prevent bounce effects */
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Fix for selection and context menu (1.6.2.7) */
+* {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none; /* Prevent iOS context menu */
+}
+
+/* Allow selection on inputs if needed */
+input, textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
