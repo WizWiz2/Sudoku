@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useSudokuGame } from './hooks/useSudokuGame';
 import { Controls } from './components/Controls';
 import { Board } from './components/Board';
@@ -8,6 +8,34 @@ import { GameOverlay } from './components/GameOverlay';
 const App: React.FC = () => {
     const game = useSudokuGame();
     const boardRef = useRef<HTMLDivElement | null>(null);
+    const [lang, setLang] = useState<string>('en');
+
+    useEffect(() => {
+        const initSDK = async () => {
+            if ((window as any).YaGames) {
+                try {
+                    const ysdk = await (window as any).YaGames.init();
+                    (window as any).ysdk = ysdk;
+                    if (ysdk.environment && ysdk.environment.i18n) {
+                        setLang(ysdk.environment.i18n.lang);
+                    }
+                } catch (e) {
+                    console.error('SDK init failed', e);
+                }
+            }
+        };
+        initSDK();
+
+        const handleContextMenu = (e: Event) => e.preventDefault();
+        document.addEventListener('contextmenu', handleContextMenu);
+        return () => document.removeEventListener('contextmenu', handleContextMenu);
+    }, []);
+
+    useEffect(() => {
+        if (!game.loading && (window as any).ysdk) {
+            (window as any).ysdk.features.LoadingAPI?.ready();
+        }
+    }, [game.loading]);
 
     const handleSelect = (row: number, col: number, event: React.MouseEvent<HTMLButtonElement>) => {
         game.setSelected({ row, col });
@@ -41,6 +69,7 @@ const App: React.FC = () => {
                         setSelected={game.setSelected}
                         handleWatchAdForHint={game.handleWatchAdForHint}
                         startGame={game.startGame}
+                        lang={lang}
                     />
                 </aside>
                 <main className="game-area">
