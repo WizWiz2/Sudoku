@@ -11,6 +11,19 @@ type YandexSdk = {
             };
         }) => void;
     };
+    environment?: {
+        i18n?: {
+            lang?: string;
+        };
+    };
+    features?: {
+        LoadingAPI?: {
+            ready?: () => void;
+        };
+        GameReadyAPI?: {
+            ready?: () => void;
+        };
+    };
 };
 
 type AdmobRewardVideo = {
@@ -27,6 +40,14 @@ declare global {
 
 const adState: { initialized: boolean; yandex?: YandexSdk } = { initialized: false };
 
+const storeSdk = (sdk?: YandexSdk) => {
+    if (!sdk) {
+        return;
+    }
+    adState.yandex = sdk;
+    window.ysdk = sdk;
+};
+
 export const initAds = async (): Promise<void> => {
     if (adState.initialized) {
         return;
@@ -34,9 +55,9 @@ export const initAds = async (): Promise<void> => {
 
     try {
         if (window.YaGames) {
-            adState.yandex = await window.YaGames.init();
+            storeSdk(await window.YaGames.init());
         } else if (window.ysdk) {
-            adState.yandex = window.ysdk;
+            storeSdk(window.ysdk);
         }
     } catch (err) {
         console.warn('Yandex Ads init failed, fallback to stub', err);
@@ -44,6 +65,8 @@ export const initAds = async (): Promise<void> => {
 
     adState.initialized = true;
 };
+
+export const getYandexSdk = (): YandexSdk | undefined => adState.yandex;
 
 const showYandexRewarded = (): Promise<RewardResult> =>
     new Promise((resolve, reject) => {

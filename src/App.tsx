@@ -1,28 +1,120 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Board, boxSizeFor, createBlankBoard, formatCellKey, generatePuzzle, isSolved, pickHintCell } from './sudoku';
-import { initAds, showRewardedAd } from './ads';
+import { getYandexSdk, initAds, showRewardedAd } from './ads';
 
 type Cell = { row: number; col: number };
+type Lang = 'en' | 'ru';
 
 const difficulties = Array.from({ length: 10 }, (_, idx) => idx + 1);
 const sizeOptions = [4, 9, 16];
 
-const difficultyLabels: Record<number, string> = {
-    1: 'Очень легко',
-    2: 'Легко',
-    3: 'Неспешно',
-    4: 'Средне',
-    5: 'Обычно',
-    6: 'Продвинуто',
-    7: 'Трудно',
-    8: 'Эксперт',
-    9: 'Без ошибок',
-    10: 'Хардкор',
+const translations = {
+    en: {
+        heroBadge: '{size}×{size} logic challenge',
+        heroTitle: 'Sudoku Challenge',
+        heroRuleRow: 'Fill every row with digits 1–{size} without repeats.',
+        heroRuleColumn: 'Each column must also contain all digits exactly once.',
+        heroRuleBox: 'Each {rows}×{cols} block needs the full set of digits.',
+        heroRuleHint: 'Use hints wisely: rewarded ads can unlock an extra hint.',
+        labelDifficulty: 'Difficulty: {value}/10',
+        labelSize: 'Grid size: {value}×{value}',
+        labelBox: 'Subgrid: {rows}×{cols}',
+        buttonNewPuzzle: 'New puzzle',
+        buttonGenerating: 'Generating...',
+        statMistakes: 'Mistakes',
+        statHints: 'Hints used',
+        statStatus: 'Status',
+        statIdle: 'Stable',
+        actionReset: 'Reset board',
+        actionClearSelection: 'Clear selection',
+        actionWatchAd: 'Watch ad for hint',
+        statusGenerating: 'Generating puzzle...',
+        statusReset: 'Board reset to initial state.',
+        statusLose: 'Game over!',
+        statusSolved: 'Great! Puzzle solved.',
+        statusInvalid: 'Board is full but contains mistakes.',
+        statusNoHint: 'All cells are already filled.',
+        statusOfflineHint: 'Hint granted in offline mode.',
+        adWatching: 'Showing ad...',
+        adReward: 'Hint unlocked!',
+        adDismissed: 'Ad closed without reward.',
+        adFailed: 'Ad unavailable, granting offline hint.',
+        overlayLoseTitle: 'Out of attempts',
+        overlayLoseText: 'You hit the limit of 3 mistakes. Try again!',
+        overlayWinTitle: 'Victory!',
+        overlayWinText: 'Solved a {size}×{size} puzzle on difficulty {difficulty}. Want another challenge?',
+        floatingPadClear: 'Clear cell',
+    },
+    ru: {
+        heroBadge: 'Премиальное судоку {size}×{size}',
+        heroTitle: 'Судоку Мастер',
+        heroRuleRow: 'Заполните каждую строку числами 1–{size} без повторов.',
+        heroRuleColumn: 'Каждый столбец также должен содержать все числа по одному разу.',
+        heroRuleBox: 'Каждый блок {rows}×{cols} должен содержать полный набор цифр.',
+        heroRuleHint: 'Используйте подсказки с умом: просмотр рекламы открывает дополнительную подсказку.',
+        labelDifficulty: 'Сложность: {value}/10',
+        labelSize: 'Размер сетки: {value}×{value}',
+        labelBox: 'Блок: {rows}×{cols}',
+        buttonNewPuzzle: 'Новая головоломка',
+        buttonGenerating: 'Генерация...',
+        statMistakes: 'Ошибки',
+        statHints: 'Подсказки',
+        statStatus: 'Статус',
+        statIdle: 'Стабильно',
+        actionReset: 'Сбросить поле',
+        actionClearSelection: 'Снять выделение',
+        actionWatchAd: 'Подсказка за рекламу',
+        statusGenerating: 'Генерируем головоломку...',
+        statusReset: 'Поле возвращено к исходнику.',
+        statusLose: 'Игра окончена!',
+        statusSolved: 'Победа! Судоку решена.',
+        statusInvalid: 'Поле заполнено, но есть ошибки.',
+        statusNoHint: 'Все клетки уже заполнены.',
+        statusOfflineHint: 'Подсказка выдана офлайн.',
+        adWatching: 'Показываем рекламу...',
+        adReward: 'Подсказка получена.',
+        adDismissed: 'Реклама закрыта без награды.',
+        adFailed: 'Нет рекламы, выдаём офлайн-подсказку.',
+        overlayLoseTitle: 'Попытки исчерпаны',
+        overlayLoseText: 'Лимит в 3 ошибки исчерпан. Попробуйте снова!',
+        overlayWinTitle: 'Отличный результат!',
+        overlayWinText: 'Вы решили сетку {size}×{size} на сложности {difficulty}. Хотите продолжить?',
+        floatingPadClear: 'Очистить клетку',
+    },
+} as const;
+
+type TranslationDict = typeof translations.en;
+type TranslationKey = keyof TranslationDict;
+type MessageDescriptor = { key: TranslationKey; params?: Record<string, string | number> } | null;
+
+const difficultyDescriptions: Record<number, { en: string; ru: string }> = {
+    1: { en: 'Very relaxed', ru: 'Очень легко' },
+    2: { en: 'Easy ride', ru: 'Легко' },
+    3: { en: 'No rush', ru: 'Неспешно' },
+    4: { en: 'Balanced', ru: 'Средне' },
+    5: { en: 'Classic', ru: 'Обычно' },
+    6: { en: 'Advanced', ru: 'Продвинуто' },
+    7: { en: 'Challenging', ru: 'Трудно' },
+    8: { en: 'Expert', ru: 'Эксперт' },
+    9: { en: 'Flawless', ru: 'Без ошибок' },
+    10: { en: 'Hardcore', ru: 'Хардкор' },
+};
+
+const resolveLang = (code?: string): Lang => (code?.toLowerCase().startsWith('ru') ? 'ru' : 'en');
+
+const interpolate = (template: string, params?: Record<string, string | number>) =>
+    template.replace(/\{(\w+)\}/g, (_, token) => String(params?.[token] ?? ''));
+
+const translate = (lang: Lang, key: TranslationKey, params?: Record<string, string | number>) => {
+    const dict = translations[lang] ?? translations.en;
+    const template = dict[key] ?? translations.en[key];
+    return template ? interpolate(template, params) : key;
 };
 
 const App: React.FC = () => {
+    const [lang, setLang] = useState<Lang>(resolveLang(typeof navigator !== 'undefined' ? navigator.language : 'en'));
     const [difficulty, setDifficulty] = useState<number>(5);
-    const [sizeIndex, setSizeIndex] = useState<number>(1); // 9x9 по умолчанию
+    const [sizeIndex, setSizeIndex] = useState<number>(1);
     const size = sizeOptions[sizeIndex];
     const box = boxSizeFor(size);
     const blockRows = size / box.rows;
@@ -33,8 +125,8 @@ const App: React.FC = () => {
     const [solution, setSolution] = useState<Board>(createBlankBoard(size));
     const [selected, setSelected] = useState<Cell | null>(null);
     const [givens, setGivens] = useState<Set<string>>(new Set());
-    const [status, setStatus] = useState<string>('Генерируем новую головоломку...');
-    const [adStatus, setAdStatus] = useState<string>('');
+    const [statusMessage, setStatusMessage] = useState<MessageDescriptor>({ key: 'statusGenerating' });
+    const [adMessage, setAdMessage] = useState<MessageDescriptor>(null);
     const [mistakes, setMistakes] = useState<number>(0);
     const [hintsUsed, setHintsUsed] = useState<number>(0);
     const [loading, setLoading] = useState<boolean>(true);
@@ -43,8 +135,44 @@ const App: React.FC = () => {
 
     const boardRef = useRef<HTMLDivElement | null>(null);
 
+    const t = useCallback((key: TranslationKey, params?: Record<string, string | number>) => translate(lang, key, params), [lang]);
+    const statusText = statusMessage ? t(statusMessage.key, statusMessage.params) : '';
+    const adStatusText = adMessage ? t(adMessage.key, adMessage.params) : '';
+
     useEffect(() => {
-        void initAds();
+        let cancelled = false;
+        const blockContextMenu = (event: Event) => event.preventDefault();
+        document.addEventListener('contextmenu', blockContextMenu);
+
+        const bootstrapSdk = async () => {
+            try {
+                await initAds();
+            } catch (err) {
+                console.warn('Ads init failed', err);
+            }
+            let sdk = window.ysdk ?? getYandexSdk();
+            if (!sdk && window.YaGames) {
+                try {
+                    sdk = await window.YaGames.init();
+                    window.ysdk = sdk;
+                } catch (err) {
+                    console.warn('YaGames init error', err);
+                }
+            }
+            const langCode = sdk?.environment?.i18n?.lang ?? (typeof navigator !== 'undefined' ? navigator.language : 'en');
+            if (!cancelled) {
+                setLang(resolveLang(langCode));
+            }
+            sdk?.features?.LoadingAPI?.ready?.();
+            sdk?.features?.GameReadyAPI?.ready?.();
+        };
+
+        void bootstrapSdk();
+
+        return () => {
+            cancelled = true;
+            document.removeEventListener('contextmenu', blockContextMenu);
+        };
     }, []);
 
     useEffect(() => {
@@ -54,12 +182,10 @@ const App: React.FC = () => {
 
     const startGame = (level: number, gridSize: number) => {
         setLoading(true);
-        setStatus('Генерируем новую сетку...');
-        setPadPos(null);
+        setStatusMessage({ key: 'statusGenerating' });
         setPadPos(null);
         setSelected(null);
         setGameOver(false);
-        // Immediate reset to prevent out-of-bounds access during render
         const blank = createBlankBoard(gridSize);
         setBoard(blank);
         setPuzzle(blank);
@@ -80,7 +206,7 @@ const App: React.FC = () => {
                         .map(({ key }) => key),
                 ),
             );
-            setStatus('');
+            setStatusMessage(null);
             setMistakes(0);
             setHintsUsed(0);
             setLoading(false);
@@ -117,7 +243,7 @@ const App: React.FC = () => {
                 const newMistakes = m + 1;
                 if (newMistakes >= 3) {
                     setGameOver(true);
-                    setStatus('Игра окончена!');
+                    setStatusMessage({ key: 'statusLose' });
                     setSelected(null);
                 }
                 return newMistakes;
@@ -132,8 +258,8 @@ const App: React.FC = () => {
         setSelected(null);
         setPadPos(null);
         setMistakes(0);
-        setStatus('Поле сброшено к исходнику');
-        setTimeout(() => setStatus(''), 1200);
+        setStatusMessage({ key: 'statusReset' });
+        setTimeout(() => setStatusMessage(null), 1200);
     };
 
     const hasNumbers = useMemo(() => board.some((row) => row.some((cell) => cell !== 0)), [board]);
@@ -142,37 +268,37 @@ const App: React.FC = () => {
 
     useEffect(() => {
         if (solved && !loading) {
-            setStatus('Победа! Судоку решена.');
+            setStatusMessage({ key: 'statusSolved' });
         } else if (isFull && !solved && !loading) {
-            setStatus('Поле заполнено, но есть ошибки!');
+            setStatusMessage({ key: 'statusInvalid' });
         }
     }, [solved, isFull, loading]);
 
     const handleWatchAdForHint = async () => {
         if (loading) return;
-        setAdStatus('Показываем рекламу...');
+        setAdMessage({ key: 'adWatching' });
         try {
             const result = await showRewardedAd();
             if (result === 'reward') {
                 applyHint();
                 setHintsUsed((h) => h + 1);
-                setAdStatus('Подсказка получена за просмотр рекламы');
+                setAdMessage({ key: 'adReward' });
             } else {
-                setAdStatus('Реклама закрыта без награды');
+                setAdMessage({ key: 'adDismissed' });
             }
         } catch (err) {
             console.error('Rewarded ad failed', err);
-            setAdStatus('Реклама недоступна, даём подсказку офлайн');
+            setAdMessage({ key: 'adFailed' });
             applyHint(true);
         } finally {
-            setTimeout(() => setAdStatus(''), 1800);
+            setTimeout(() => setAdMessage(null), 2000);
         }
     };
 
     const applyHint = (fallback = false) => {
         const cell = pickHintCell(board, solution);
         if (!cell) {
-            setStatus('Все клетки уже заполнены.');
+            setStatusMessage({ key: 'statusNoHint' });
             return;
         }
         const [row, col] = cell;
@@ -186,13 +312,14 @@ const App: React.FC = () => {
             return next;
         });
         if (fallback) {
-            setStatus('Подсказка включена в офлайн-режиме.');
+            setStatusMessage({ key: 'statusOfflineHint' });
         }
     };
 
     const cellGap = 4;
     const blockGap = 12;
     const boardWidth = Math.min(900, Math.max(360, size * 48));
+    const boardWidthStyle = `min(92vw, calc(100vh - 260px), ${boardWidth}px)`;
     const cellFont = Math.max(14, Math.min(28, Math.floor(boardWidth / size) - 6));
 
     const renderBlock = (blockRow: number, blockCol: number) => (
@@ -223,8 +350,7 @@ const App: React.FC = () => {
                         <button
                             key={key}
                             type="button"
-                            className={`cell ${isGiven ? 'given' : ''} ${isSelected ? 'selected' : ''} ${isConflict ? 'conflict' : ''
-                                }`}
+                            className={`cell ${isGiven ? 'given' : ''} ${isSelected ? 'selected' : ''} ${isConflict ? 'conflict' : ''}`}
                             onClick={(e) => handleSelect(r, c, e)}
                             disabled={loading}
                         >
@@ -237,18 +363,20 @@ const App: React.FC = () => {
         </div>
     );
 
+    const difficultyDescription = difficultyDescriptions[difficulty]?.[lang] ?? difficultyDescriptions[difficulty]?.en ?? '';
+
     return (
         <div className="page">
             <div className="glass">
                 <header className="top simple">
                     <div>
-                        <p className="eyebrow">Судоку · {size}×{size} · 10 уровней</p>
-                        <h1>Судоку</h1>
+                        <p className="eyebrow">{t('heroBadge', { size })}</p>
+                        <h1>{t('heroTitle')}</h1>
                         <ul className="rules">
-                            <li>Заполните каждую строку числами 1–{size} без повторов.</li>
-                            <li>В каждом столбце — те же числа без повторов.</li>
-                            <li>В каждом блоке {box.rows}×{box.cols} — тоже без повторов.</li>
-                            <li>Подсказку можно получить за просмотр рекламы; если рекламы нет, даём офлайн.</li>
+                            <li>{t('heroRuleRow', { size })}</li>
+                            <li>{t('heroRuleColumn')}</li>
+                            <li>{t('heroRuleBox', { rows: box.rows, cols: box.cols })}</li>
+                            <li>{t('heroRuleHint')}</li>
                         </ul>
                     </div>
                 </header>
@@ -256,8 +384,8 @@ const App: React.FC = () => {
                 <section className="panel controls">
                     <div className="control-row">
                         <div>
-                            <div className="label">Сложность: {difficulty}/10</div>
-                            <div className="label subtle">{difficultyLabels[difficulty] ?? 'Обычно'}</div>
+                            <div className="label">{t('labelDifficulty', { value: difficulty })}</div>
+                            <div className="label subtle">{difficultyDescription}</div>
                         </div>
                         <div className="range-wrap">
                             <input
@@ -274,8 +402,8 @@ const App: React.FC = () => {
                             </div>
                         </div>
                         <div className="range-wrap">
-                            <div className="label">Размер поля: {size}×{size}</div>
-                            <div className="label subtle">Блоки {box.rows}×{box.cols}</div>
+                            <div className="label">{t('labelSize', { value: size })}</div>
+                            <div className="label subtle">{t('labelBox', { rows: box.rows, cols: box.cols })}</div>
                             <input
                                 type="range"
                                 min={0}
@@ -293,32 +421,32 @@ const App: React.FC = () => {
                             </div>
                         </div>
                         <button className="primary" type="button" onClick={() => startGame(difficulty, size)} disabled={loading}>
-                            {loading ? 'Генерация...' : 'Новая партия'}
+                            {loading ? t('buttonGenerating') : t('buttonNewPuzzle')}
                         </button>
                     </div>
 
                     <div className="control-row wrap">
                         <div className="stat">
-                            <span className="stat-label">Ошибки</span>
+                            <span className="stat-label">{t('statMistakes')}</span>
                             <span className="stat-value">{mistakes}</span>
                         </div>
                         <div className="stat">
-                            <span className="stat-label">Подсказки</span>
+                            <span className="stat-label">{t('statHints')}</span>
                             <span className="stat-value">{hintsUsed}</span>
                         </div>
                         <div className="stat">
-                            <span className="stat-label">Статус</span>
-                            <span className="stat-value">{status || adStatus || 'Играем'}</span>
+                            <span className="stat-label">{t('statStatus')}</span>
+                            <span className="stat-value">{statusText || adStatusText || t('statIdle')}</span>
                         </div>
                         <div className="actions">
                             <button type="button" onClick={resetToPuzzle} disabled={loading}>
-                                Сбросить
+                                {t('actionReset')}
                             </button>
                             <button className="ghost" type="button" onClick={() => setSelected(null)} disabled={loading}>
-                                Снять выделение
+                                {t('actionClearSelection')}
                             </button>
                             <button className="accent-btn" type="button" onClick={handleWatchAdForHint} disabled={loading}>
-                                Подсказка за рекламу
+                                {t('actionWatchAd')}
                             </button>
                         </div>
                     </div>
@@ -329,7 +457,7 @@ const App: React.FC = () => {
                         <div
                             className="board blocks"
                             style={{
-                                width: 'min(92vw, ' + `${boardWidth}px)`,
+                                width: boardWidthStyle,
                                 ['--cell-font' as string]: `${cellFont}px`,
                                 ['--cell-gap' as string]: `${cellGap}px`,
                                 ['--block-gap' as string]: `${blockGap}px`,
@@ -350,7 +478,7 @@ const App: React.FC = () => {
                                     </button>
                                 ))}
                                 <button type="button" onClick={() => handleNumberInput(0)} disabled={loading} className="ghost">
-                                    Очистить
+                                    {t('floatingPadClear')}
                                 </button>
                             </div>
                         )}
@@ -360,10 +488,10 @@ const App: React.FC = () => {
                 {gameOver && (
                     <div className="overlay-container">
                         <section className="panel success" style={{ borderColor: 'rgba(255, 99, 132, 0.5)', background: 'rgba(255, 99, 132, 0.1)' }}>
-                            <h2>Игра окончена</h2>
-                            <p>Вы допустили 3 ошибки. Попробуйте снова!</p>
+                            <h2>{t('overlayLoseTitle')}</h2>
+                            <p>{t('overlayLoseText')}</p>
                             <button className="primary" type="button" onClick={() => startGame(difficulty, size)}>
-                                Новая партия
+                                {t('buttonNewPuzzle')}
                             </button>
                         </section>
                     </div>
@@ -372,10 +500,10 @@ const App: React.FC = () => {
                 {solved && (
                     <div className="overlay-container">
                         <section className="panel success">
-                            <h2>Готово!</h2>
-                            <p>Вы закрыли судоку {size}×{size} на уровне {difficulty}. Новая партия?</p>
+                            <h2>{t('overlayWinTitle')}</h2>
+                            <p>{t('overlayWinText', { size, difficulty })}</p>
                             <button className="primary" type="button" onClick={() => startGame(difficulty, size)}>
-                                Новая партия
+                                {t('buttonNewPuzzle')}
                             </button>
                         </section>
                     </div>
