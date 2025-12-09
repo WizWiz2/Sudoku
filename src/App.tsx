@@ -1,4 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Board, boxSizeFor, createBlankBoard, formatCellKey, generatePuzzle, isSolved, pickHintCell } from './sudoku';
 import { getYandexSdk, initAds, showRewardedAd } from './ads';
 
@@ -213,16 +214,53 @@ const App: React.FC = () => {
         }, 30);
     };
 
+
+
     const handleSelect = (row: number, col: number, event: React.MouseEvent<HTMLButtonElement>) => {
         setSelected({ row, col });
-        const boardRect = boardRef.current?.getBoundingClientRect();
+
         const cellRect = event.currentTarget.getBoundingClientRect();
-        if (boardRect) {
-            setPadPos({
-                x: cellRect.left - boardRect.left + cellRect.width / 2,
-                y: cellRect.top - boardRect.top + cellRect.height / 2,
-            });
+        // Use board bounds as constraint
+        const boardRect = boardRef.current?.getBoundingClientRect() ?? {
+            left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight, width: window.innerWidth, height: window.innerHeight
+        };
+
+        const padWidth = 180;
+        // Accurate height estimation
+        // CSS: width 180, padding 12, gap 8. Col width ~46.6px. Button height ~47px.
+        // Grid: ceil(size/3) rows of numbers.
+        // Ghost button (Clear): 36px height.
+        // Total Height = PaddingTop(12) + NumRows * (47 + 8) - 8 (last gap) + 8 (gap before clear) + Clear(36) + PaddingBot(12)?
+        // Simplified: 24 (padding) + NumRows * 55 + 44 (Clear + gap).
+        const numRows = Math.ceil(size / 3);
+        const padHeight = 24 + numRows * 55 + 44;
+
+        // 1. Horizontal Positioning (Center with Clamp)
+        let x = cellRect.left + cellRect.width / 2;
+        const minX = boardRect.left + padWidth / 2 + 4; // +4 margin
+        const maxX = boardRect.right - padWidth / 2 - 4;
+        x = Math.max(minX, Math.min(x, maxX));
+
+        // 2. Vertical Positioning (Priority: Below > Above > Clamped)
+        const gap = 8;
+        let y = cellRect.bottom + gap;
+
+        // Check fit below
+        if (y + padHeight > boardRect.bottom) {
+            // Check fit above
+            const yAbove = cellRect.top - gap - padHeight;
+            if (yAbove >= boardRect.top) {
+                y = yAbove;
+            } else {
+                // Doesn't fit perfectly below OR above.
+                // Clamp to bottom of board (safest "never leave board")
+                y = boardRect.bottom - padHeight - gap;
+                // Ensure it doesn't go off top
+                y = Math.max(boardRect.top + gap, y);
+            }
         }
+
+        setPadPos({ x, y });
     };
 
     const handleNumberInput = (value: number) => {
@@ -249,7 +287,8 @@ const App: React.FC = () => {
                 return newMistakes;
             });
         }
-
+        // Keep selection active for easier typing? Or close? User request implies "pop up", maybe keep open?
+        // Usually clicking a number closes the pad.
         setPadPos(null);
     };
 
@@ -318,9 +357,8 @@ const App: React.FC = () => {
 
     const cellGap = 4;
     const blockGap = 12;
-    const boardWidth = Math.min(900, Math.max(360, size * 48));
-    const boardWidthStyle = `min(92vw, calc(100vh - 260px), ${boardWidth}px)`;
-    const cellFont = Math.max(14, Math.min(28, Math.floor(boardWidth / size) - 6));
+    // Dynamic sizing moved to CSS mostly, but we define grid connection here
+    // We pass '--grid-size': size to CSS
 
     const renderBlock = (blockRow: number, blockCol: number) => (
         <div
@@ -368,99 +406,14 @@ const App: React.FC = () => {
     return (
         <div className="page">
             <div className="glass">
-                <header className="top simple">
-                    <div>
-                        <p className="eyebrow">{t('heroBadge', { size })}</p>
-                        <h1>{t('heroTitle')}</h1>
-                        <ul className="rules">
-                            <li>{t('heroRuleRow', { size })}</li>
-                            <li>{t('heroRuleColumn')}</li>
-                            <li>{t('heroRuleBox', { rows: box.rows, cols: box.cols })}</li>
-                            <li>{t('heroRuleHint')}</li>
-                        </ul>
-                    </div>
-                </header>
-
-                <section className="panel controls">
-                    <div className="control-row">
-                        <div>
-                            <div className="label">{t('labelDifficulty', { value: difficulty })}</div>
-                            <div className="label subtle">{difficultyDescription}</div>
-                        </div>
-                        <div className="range-wrap">
-                            <input
-                                type="range"
-                                min={1}
-                                max={10}
-                                value={difficulty}
-                                onChange={(e) => setDifficulty(Number(e.target.value))}
-                            />
-                            <div className="ticks">
-                                {difficulties.map((d) => (
-                                    <span key={d} className={`tick ${d === difficulty ? 'active' : ''}`} />
-                                ))}
-                            </div>
-                        </div>
-                        <div className="range-wrap">
-                            <div className="label">{t('labelSize', { value: size })}</div>
-                            <div className="label subtle">{t('labelBox', { rows: box.rows, cols: box.cols })}</div>
-                            <input
-                                type="range"
-                                min={0}
-                                max={sizeOptions.length - 1}
-                                step={1}
-                                value={sizeIndex}
-                                onChange={(e) => setSizeIndex(Number(e.target.value))}
-                            />
-                            <div className="ticks sizes">
-                                {sizeOptions.map((s, idx) => (
-                                    <span key={s} className={`tick ${idx === sizeIndex ? 'active' : ''}`}>
-                                        {s}
-                                    </span>
-                                ))}
-                            </div>
-                        </div>
-                        <button className="primary" type="button" onClick={() => startGame(difficulty, size)} disabled={loading}>
-                            {loading ? t('buttonGenerating') : t('buttonNewPuzzle')}
-                        </button>
-                    </div>
-
-                    <div className="control-row wrap">
-                        <div className="stat">
-                            <span className="stat-label">{t('statMistakes')}</span>
-                            <span className="stat-value">{mistakes}</span>
-                        </div>
-                        <div className="stat">
-                            <span className="stat-label">{t('statHints')}</span>
-                            <span className="stat-value">{hintsUsed}</span>
-                        </div>
-                        <div className="stat">
-                            <span className="stat-label">{t('statStatus')}</span>
-                            <span className="stat-value">{statusText || adStatusText || t('statIdle')}</span>
-                        </div>
-                        <div className="actions">
-                            <button type="button" onClick={resetToPuzzle} disabled={loading}>
-                                {t('actionReset')}
-                            </button>
-                            <button className="ghost" type="button" onClick={() => setSelected(null)} disabled={loading}>
-                                {t('actionClearSelection')}
-                            </button>
-                            <button className="accent-btn" type="button" onClick={handleWatchAdForHint} disabled={loading}>
-                                {t('actionWatchAd')}
-                            </button>
-                        </div>
-                    </div>
-                </section>
-
                 <section className="board-panel">
                     <div className="board-wrapper" ref={boardRef}>
                         <div
                             className="board blocks"
                             style={{
-                                width: boardWidthStyle,
-                                ['--cell-font' as string]: `${cellFont}px`,
                                 ['--cell-gap' as string]: `${cellGap}px`,
                                 ['--block-gap' as string]: `${blockGap}px`,
+                                ['--grid-size' as string]: size,
                                 gridTemplateColumns: `repeat(${blockCols}, 1fr)`,
                                 gridTemplateRows: `repeat(${blockRows}, 1fr)`,
                                 gap: `${blockGap}px`,
@@ -470,7 +423,7 @@ const App: React.FC = () => {
                                 Array.from({ length: blockCols }).map((_, bc) => renderBlock(br, bc)),
                             )}
                         </div>
-                        {padPos && !gameOver && (
+                        {padPos && !gameOver && createPortal(
                             <div className="floating-pad" style={{ left: padPos.x, top: padPos.y }}>
                                 {Array.from({ length: size }, (_, i) => i + 1).map((num) => (
                                     <button key={num} type="button" onClick={() => handleNumberInput(num)} disabled={loading}>
@@ -480,8 +433,63 @@ const App: React.FC = () => {
                                 <button type="button" onClick={() => handleNumberInput(0)} disabled={loading} className="ghost">
                                     {t('floatingPadClear')}
                                 </button>
-                            </div>
+                            </div>,
+                            document.body,
                         )}
+                    </div>
+                </section>
+
+                <section className="panel controls">
+                    <h2>Sudoku</h2>
+                    <div className="control-group">
+                        <div className="label">{t('labelDifficulty', { value: difficulty })}</div>
+                        <div className="label subtle">{difficultyDescription}</div>
+                        <input
+                            type="range"
+                            min={1}
+                            max={10}
+                            value={difficulty}
+                            onChange={(e) => setDifficulty(Number(e.target.value))}
+                        />
+                    </div>
+
+                    <div className="control-group">
+                        <div className="label">{t('labelSize', { value: size })}</div>
+                        <input
+                            type="range"
+                            min={0}
+                            max={sizeOptions.length - 1}
+                            step={1}
+                            value={sizeIndex}
+                            onChange={(e) => setSizeIndex(Number(e.target.value))}
+                        />
+                        <div className="ticks sizes">
+                            {sizeOptions.map((s, idx) => (
+                                <span key={s} className={`tick ${idx === sizeIndex ? 'active' : ''}`}>
+                                    {s}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="stats-row">
+                        <div className="stat">
+                            <span className="stat-label">{t('statMistakes')}</span>
+                            <span className="stat-value">{mistakes}/3</span>
+                        </div>
+                        <div className="stat">
+                            <span className="stat-label">{t('statHints')}</span>
+                            <span className="stat-value">{hintsUsed}</span>
+                        </div>
+                    </div>
+
+                    <div className="actions-col">
+                        <button className="primary" type="button" onClick={() => startGame(difficulty, size)} disabled={loading}>
+                            {loading ? t('buttonGenerating') : t('buttonNewPuzzle')}
+                        </button>
+                        <button className="accent-btn" type="button" onClick={handleWatchAdForHint} disabled={loading}>
+                            {t('actionWatchAd')}
+                        </button>
                     </div>
                 </section>
 
