@@ -6,7 +6,7 @@ import { getYandexSdk, initAds, showRewardedAd } from './ads';
 type Cell = { row: number; col: number };
 type Lang = 'en' | 'ru';
 
-const difficulties = Array.from({ length: 10 }, (_, idx) => idx + 1);
+
 const sizeOptions = [4, 9, 16];
 
 const translations = {
@@ -122,12 +122,12 @@ const App: React.FC = () => {
     const blockCols = size / box.cols;
 
     const [board, setBoard] = useState<Board>(createBlankBoard(size));
-    const [puzzle, setPuzzle] = useState<Board>(createBlankBoard(size));
+    const [, setPuzzle] = useState<Board>(createBlankBoard(size));
     const [solution, setSolution] = useState<Board>(createBlankBoard(size));
     const [selected, setSelected] = useState<Cell | null>(null);
     const [givens, setGivens] = useState<Set<string>>(new Set());
-    const [statusMessage, setStatusMessage] = useState<MessageDescriptor>({ key: 'statusGenerating' });
-    const [adMessage, setAdMessage] = useState<MessageDescriptor>(null);
+    const [, setStatusMessage] = useState<MessageDescriptor>({ key: 'statusGenerating' });
+    const [, setAdMessage] = useState<MessageDescriptor>(null);
     const [mistakes, setMistakes] = useState<number>(0);
     const [hintsUsed, setHintsUsed] = useState<number>(0);
     const [loading, setLoading] = useState<boolean>(true);
@@ -137,8 +137,7 @@ const App: React.FC = () => {
     const boardRef = useRef<HTMLDivElement | null>(null);
 
     const t = useCallback((key: TranslationKey, params?: Record<string, string | number>) => translate(lang, key, params), [lang]);
-    const statusText = statusMessage ? t(statusMessage.key, statusMessage.params) : '';
-    const adStatusText = adMessage ? t(adMessage.key, adMessage.params) : '';
+
 
     useEffect(() => {
         let cancelled = false;
@@ -290,15 +289,6 @@ const App: React.FC = () => {
         // Keep selection active for easier typing? Or close? User request implies "pop up", maybe keep open?
         // Usually clicking a number closes the pad.
         setPadPos(null);
-    };
-
-    const resetToPuzzle = () => {
-        setBoard(puzzle.map((row) => [...row]));
-        setSelected(null);
-        setPadPos(null);
-        setMistakes(0);
-        setStatusMessage({ key: 'statusReset' });
-        setTimeout(() => setStatusMessage(null), 1200);
     };
 
     const hasNumbers = useMemo(() => board.some((row) => row.some((cell) => cell !== 0)), [board]);
