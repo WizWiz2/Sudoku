@@ -12,7 +12,7 @@ const sizeOptions = [4, 9, 16];
 const translations = {
     en: {
         heroBadge: '{size}×{size} logic challenge',
-        heroTitle: 'Sudoku Challenge',
+        heroTitle: 'Sudoku Game',
         heroRuleRow: 'Fill every row with digits 1–{size} without repeats.',
         heroRuleColumn: 'Each column must also contain all digits exactly once.',
         heroRuleBox: 'Each {rows}×{cols} block needs the full set of digits.',
@@ -48,7 +48,7 @@ const translations = {
     },
     ru: {
         heroBadge: 'Премиальное судоку {size}×{size}',
-        heroTitle: 'Судоку Мастер',
+        heroTitle: 'Головоломка Судоку',
         heroRuleRow: 'Заполните каждую строку числами 1–{size} без повторов.',
         heroRuleColumn: 'Каждый столбец также должен содержать все числа по одному разу.',
         heroRuleBox: 'Каждый блок {rows}×{cols} должен содержать полный набор цифр.',
@@ -133,6 +133,7 @@ const App: React.FC = () => {
     const [loading, setLoading] = useState<boolean>(true);
     const [padPos, setPadPos] = useState<{ x: number; y: number } | null>(null);
     const [gameOver, setGameOver] = useState<boolean>(false);
+    const [sdkReady, setSdkReady] = useState<boolean>(false);
 
     const boardRef = useRef<HTMLDivElement | null>(null);
 
@@ -162,9 +163,9 @@ const App: React.FC = () => {
             const langCode = sdk?.environment?.i18n?.lang ?? (typeof navigator !== 'undefined' ? navigator.language : 'en');
             if (!cancelled) {
                 setLang(resolveLang(langCode));
+                setSdkReady(true);
             }
             sdk?.features?.LoadingAPI?.ready?.();
-            sdk?.features?.GameReadyAPI?.ready?.();
         };
 
         void bootstrapSdk();
@@ -175,10 +176,19 @@ const App: React.FC = () => {
         };
     }, []);
 
+    // Report Game Ready when loading finishes AND sdk is ready
     useEffect(() => {
-        startGame(difficulty, size);
+        if (!loading && sdkReady) {
+            window.ysdk?.features?.GameReadyAPI?.ready?.();
+        }
+    }, [loading, sdkReady]);
+
+    useEffect(() => {
+        if (sdkReady) {
+            startGame(difficulty, size);
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [size]);
+    }, [size, sdkReady]);
 
     const startGame = (level: number, gridSize: number) => {
         setLoading(true);
@@ -394,7 +404,7 @@ const App: React.FC = () => {
     const difficultyDescription = difficultyDescriptions[difficulty]?.[lang] ?? difficultyDescriptions[difficulty]?.en ?? '';
 
     return (
-        <div className="page">
+        <div className="page" onContextMenu={(e) => e.preventDefault()}>
             <div className="glass">
                 <section className="board-panel">
                     <div className="board-wrapper" ref={boardRef}>
@@ -430,7 +440,7 @@ const App: React.FC = () => {
                 </section>
 
                 <section className="panel controls">
-                    <h2>Sudoku</h2>
+                    <h2>{t('heroTitle')}</h2>
                     <div className="control-group">
                         <div className="label">{t('labelDifficulty', { value: difficulty })}</div>
                         <div className="label subtle">{difficultyDescription}</div>

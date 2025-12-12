@@ -60,7 +60,6 @@
 **Управление:**
 *   Нажмите на клетку, чтобы выбрать её.
 *   Выберите цифру из панели внизу или используйте клавиатуру.
-*   Используйте режим "Карандаш" для заметок.
 *   Если ошиблись — игра подсветит неверную цифру.
 *   Нажмите "Подсказка", если не знаете, какой ход сделать следующим.
 
@@ -96,6 +95,5 @@ The goal is to fill the empty cells with numbers.
 **Controls:**
 *   Tap a cell to select it.
 *   Choose a number from the bottom panel or use your keyboard.
-*   Use "Pencil" mode for notes.
 *   If you make a mistake, the game will highlight the incorrect number.
 *   Click "Hint" if you don't know the next move.
