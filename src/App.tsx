@@ -101,7 +101,7 @@ const difficultyDescriptions: Record<number, { en: string; ru: string }> = {
     10: { en: 'Hardcore', ru: 'Хардкор' },
 };
 
-const resolveLang = (code?: string): Lang => (code?.toLowerCase().startsWith('ru') ? 'ru' : 'en');
+const resolveLang = (code?: string): Lang => 'en'; // Force English for screenshots
 
 const interpolate = (template: string, params?: Record<string, string | number>) =>
     template.replace(/\{(\w+)\}/g, (_, token) => String(params?.[token] ?? ''));
