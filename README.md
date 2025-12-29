@@ -1,6 +1,12 @@
-# Sudoku (Yandex Games / Google Play WebView)
+# Головоломка Судоку
 
-Минимальный гайд по проекту судоку с генератором и подсказками за рекламу.
+**🎮 Играть:** [Yandex Games](https://yandex.ru/games/app/362641) | [Google Play](https://play.google.com/store/apps/details?id=com.wizwiz.sudoku)
+
+![React](https://img.shields.io/badge/React-18+-blue?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5+-blue?logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-5+-purple?logo=vite&logoColor=white)
+
+Судоку с генератором и подсказками за рекламу. Три размера поля, 10 уровней сложности.
 
 ## Возможности
 - Генерация судоку на лету: размеры 4×4, 9×9, 16×16 с корректными блоками.
